@@ -17,7 +17,7 @@ constexpr float SWIRL_FREQ  = 6.0f;
 constexpr float SPIN_SPEED  = 2.2f; // radians per second
 constexpr float SWAY_AMOUNT = 8.0f;
 constexpr int POSITION_X    = 24;   // screen position for sprite (left side)
-constexpr float TWO_PI      = 6.28318530718f;
+constexpr float FULL_ROTATION = 6.28318530718f;
 
 TFT_eSprite tornadoSprite(&tft);
 float spinPhase = 0.0f;
@@ -47,8 +47,8 @@ void tornadoInit() {
 void tornadoUpdate(uint32_t dt_ms) {
   float dt = dt_ms / 1000.0f;
   spinPhase += SPIN_SPEED * dt;
-  if (spinPhase > TWO_PI) {
-    spinPhase -= TWO_PI;
+  if (spinPhase > FULL_ROTATION) {
+    spinPhase -= FULL_ROTATION;
   }
 }
 
