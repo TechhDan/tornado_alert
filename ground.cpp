@@ -9,14 +9,15 @@ static const int SCROLL_PX_PER_SEC = 40; // speed of ground scroll
 static const int SCROLL_DIR = +1;    // +1 = left→right, -1 = right→left
 
 // One 16x16 tile sprite we’ll repeat across the strip
-static TFT_eSprite groundTile(&tft);
+static TFT_eSprite groundTileTop(&tft);
+static TFT_eSprite groundTileDirt(&tft);
 
 // fractional scroll offset in pixels (0..TILE-1)
 static float scrollPx = 0.0f;
 
-static void buildGroundTile() {
-  groundTile.setColorDepth(16);
-  groundTile.createSprite(TILE, TILE);
+static void buildGroundTile(TFT_eSprite &tile, bool includeGrass) {
+  tile.setColorDepth(16);
+  tile.createSprite(TILE, TILE);
 
   // Colors
   uint16_t grass      = tft.color565( 34,139, 34); // forest green
@@ -25,30 +26,35 @@ static void buildGroundTile() {
   uint16_t dirtDark   = tft.color565(110, 50, 15); // darker specks
 
   // Base fill: dirt
-  groundTile.fillSprite(dirt);
+  tile.fillSprite(dirt);
 
   // Speckles in dirt for texture (simple pseudo-random pattern)
   for (int y = 6; y < TILE; ++y) {
     for (int x = 0; x < TILE; ++x) {
       if (((x * 13 + y * 7) & 0x07) == 0) {
-        groundTile.drawPixel(x, y, dirtDark);
+        tile.drawPixel(x, y, dirtDark);
       }
     }
   }
 
+  if (!includeGrass) {
+    return;
+  }
+
   // Grass band on top (5 px tall)
   for (int y = 0; y < 5; ++y) {
-    groundTile.drawFastHLine(0, y, TILE, grass);
+    tile.drawFastHLine(0, y, TILE, grass);
   }
   // Little “blades” / highlights
   for (int x = 1; x < TILE-1; x += 3) {
-    groundTile.drawPixel(x, 1, grassLite);
-    groundTile.drawPixel(x+1, 2, grassLite);
+    tile.drawPixel(x, 1, grassLite);
+    tile.drawPixel(x+1, 2, grassLite);
   }
 }
 
 void groundInit() {
-  buildGroundTile();
+  buildGroundTile(groundTileTop, true);
+  buildGroundTile(groundTileDirt, false);
 }
 
 void groundUpdate(uint32_t dt_ms) {
@@ -75,7 +81,11 @@ void groundRender() {
     int y = baseY + r * TILE;
     for (int c = 0; c < cols; ++c) {
       int x = startX + c * TILE;
-      groundTile.pushSprite(x, y);
+      if (r == 0) {
+        groundTileTop.pushSprite(x, y);
+      } else {
+        groundTileDirt.pushSprite(x, y);
+      }
     }
   }
 }
