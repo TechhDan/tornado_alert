@@ -3,6 +3,7 @@
 #include "ground.h"
 #include "mountains.h"
 #include "clouds.h"
+#include "tornado.h"
 #include "config.h"
 static uint32_t lastFrame = 0;
 
@@ -11,6 +12,7 @@ void gameInit() {
   gfxClearSky();
   cloudsInit();
   mountainsInit();
+  tornadoInit();
   groundInit();
   lastFrame = millis();
 }
@@ -24,8 +26,10 @@ void gameUpdate() {
   // Update & render parallax background
   cloudsUpdate(dt);
   mountainsUpdate(dt);
+  tornadoUpdate(dt);
   cloudsRender();
   mountainsRender();
+  tornadoRender();
 
   // Update & render ground (scrolling left→right)
   groundUpdate(dt);
