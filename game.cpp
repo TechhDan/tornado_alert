@@ -2,6 +2,7 @@
 #include "gfx.h"
 #include "ground.h"
 #include "mountains.h"
+#include "clouds.h"
 #include "config.h"
 #include "colors.h"
 
@@ -20,6 +21,7 @@ static uint32_t lastFrame = 0;
 void gameInit() {
   gfxInit();
   gfxClearSky();
+  cloudsInit();
   mountainsInit();
   groundInit();
   spriteBuild();
@@ -37,7 +39,9 @@ void gameUpdate() {
   }
 
   // Update & render parallax background
+  cloudsUpdate(dt);
   mountainsUpdate(dt);
+  cloudsRender();
   mountainsRender();
 
   // Update & render ground (scrolling left→right)
