@@ -23,6 +23,8 @@ MountainLayer layers[LAYER_COUNT] = {
   {0.0f, 20, 54, 110, 0, 0}
 };
 
+static TFT_eSprite mountainsCanvas(&tft);
+
 // height in pixels that the mountain strip occupies. We use the tallest layer.
 constexpr int STRIP_HEIGHT = 64;
 
@@ -37,6 +39,9 @@ void mountainsInit() {
   layers[0].highlightColor = makeColor(180, 210, 230);
   layers[1].baseColor      = makeColor(60, 100, 140);
   layers[1].highlightColor = makeColor(160, 190, 210);
+
+  mountainsCanvas.setColorDepth(16);
+  mountainsCanvas.createSprite(SCREEN_W, STRIP_HEIGHT);
 
   for (auto &layer : layers) {
     layer.scrollPx = 0.0f;
@@ -58,10 +63,9 @@ void mountainsUpdate(uint32_t dt_ms) {
 }
 
 void mountainsRender() {
-  const int baseY = SCREEN_H - GROUND_HEIGHT; // align with top of ground
-  const int topY  = baseY - STRIP_HEIGHT;
+  const int topY = SCREEN_H - GROUND_HEIGHT - STRIP_HEIGHT + 1; // align strip with ground
 
-  tft.fillRect(0, topY, SCREEN_W, STRIP_HEIGHT, SKY_BLUE(tft));
+  mountainsCanvas.fillSprite(SKY_BLUE(tft));
 
   for (int i = 0; i < LAYER_COUNT; ++i) {
     MountainLayer &layer = layers[i];
@@ -71,17 +75,29 @@ void mountainsRender() {
     for (int c = 0; c < cols; ++c) {
       int xLeft  = startX + c * layer.patternWidth;
       int xRight = xLeft + layer.patternWidth;
+      if (xRight <= 0 || xLeft >= SCREEN_W) {
+        continue;
+      }
       int peakX  = xLeft + (layer.patternWidth / 2);
-      int peakY  = baseY - layer.heightPx;
+      int peakY  = STRIP_HEIGHT - 1 - layer.heightPx;
 
-      tft.fillTriangle(xLeft, baseY, xRight, baseY, peakX, peakY, layer.baseColor);
+      int baseRow = STRIP_HEIGHT - 1;
+
+      mountainsCanvas.fillTriangle(xLeft, baseRow, xRight, baseRow, peakX, peakY,
+                                   layer.baseColor);
 
       int highlightLeft   = peakX - layer.patternWidth / 8;
       int highlightRight  = peakX + layer.patternWidth / 8;
-      int highlightBaseY  = baseY - (layer.heightPx / 3);
+      int highlightBaseY  = baseRow - (layer.heightPx / 3);
       int highlightPeakY  = peakY;
-      tft.fillTriangle(highlightLeft, highlightBaseY, highlightRight, highlightBaseY, peakX,
-                       highlightPeakY, layer.highlightColor);
+      if (highlightBaseY < highlightPeakY) {
+        highlightBaseY = highlightPeakY;
+      }
+      mountainsCanvas.fillTriangle(highlightLeft, highlightBaseY, highlightRight,
+                                   highlightBaseY, peakX, highlightPeakY,
+                                   layer.highlightColor);
     }
   }
+
+  mountainsCanvas.pushSprite(0, topY);
 }
