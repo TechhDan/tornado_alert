@@ -25,11 +25,13 @@ static void buildGroundTile(TFT_eSprite &tile, bool includeGrass) {
   uint16_t dirt       = tft.color565(139, 69, 19); // brown
   uint16_t dirtDark   = tft.color565(110, 50, 15); // darker specks
 
+  const int grassHeight = includeGrass ? 8 : 0; // pixels of grass on the top tile
+
   // Base fill: dirt
   tile.fillSprite(dirt);
 
   // Speckles in dirt for texture (simple pseudo-random pattern)
-  for (int y = 6; y < TILE; ++y) {
+  for (int y = grassHeight; y < TILE; ++y) {
     for (int x = 0; x < TILE; ++x) {
       if (((x * 13 + y * 7) & 0x07) == 0) {
         tile.drawPixel(x, y, dirtDark);
@@ -41,14 +43,17 @@ static void buildGroundTile(TFT_eSprite &tile, bool includeGrass) {
     return;
   }
 
-  // Grass band on top (5 px tall)
-  for (int y = 0; y < 5; ++y) {
+  // Grass band on top
+  for (int y = 0; y < grassHeight; ++y) {
     tile.drawFastHLine(0, y, TILE, grass);
   }
   // Little “blades” / highlights
   for (int x = 1; x < TILE-1; x += 3) {
     tile.drawPixel(x, 1, grassLite);
     tile.drawPixel(x+1, 2, grassLite);
+    if (grassHeight > 5) {
+      tile.drawPixel(x, grassHeight - 2, grassLite);
+    }
   }
 }
 
