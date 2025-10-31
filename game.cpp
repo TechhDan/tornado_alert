@@ -1,6 +1,7 @@
 #include "game.h"
 #include "gfx.h"
 #include "ground.h"
+#include "mountains.h"
 #include "config.h"
 #include "colors.h"
 
@@ -19,6 +20,7 @@ static uint32_t lastFrame = 0;
 void gameInit() {
   gfxInit();
   gfxClearSky();
+  mountainsInit();
   groundInit();
   spriteBuild();
   lastFrame = millis();
@@ -33,6 +35,10 @@ void gameUpdate() {
   if (lastDrawX >= 0 && lastDrawY >= 0) {
     spriteErase(lastDrawX, lastDrawY, SPRITE_SIZE, SPRITE_SIZE);
   }
+
+  // Update & render parallax background
+  mountainsUpdate(dt);
+  mountainsRender();
 
   // Update & render ground (scrolling left→right)
   groundUpdate(dt);

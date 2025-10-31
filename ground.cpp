@@ -4,7 +4,7 @@
 #include "colors.h"
 
 static const int TILE      = 16;     // tile size
-static const int GROUND_H  = 48;     // total ground height (px)
+static const int GROUND_H  = GROUND_HEIGHT;     // total ground height (px)
 static const int SCROLL_PX_PER_SEC = 40; // speed of ground scroll
 static const int SCROLL_DIR = +1;    // +1 = left→right, -1 = right→left
 
