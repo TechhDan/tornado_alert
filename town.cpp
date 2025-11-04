@@ -36,56 +36,76 @@ int groundLine() {
 
 void drawHouse(TFT_eSprite &dst, int x, int baseY, int width, int height,
                uint16_t wallColor, uint16_t roofColor, bool doorCenter) {
-  int topY = baseY - height + 1;
-  if (topY >= baseY) return;
-  dst.fillRect(x, topY, width, height, wallColor);
+  const int houseTop  = baseY - height + 1;
+  const int roofH     = std::max(4, height / 3);
+  const int wallTop   = houseTop + roofH;           // start wall under the eaves
+  const int wallH     = height - roofH;
+  if (wallH <= 0) return;
 
-  int roofHeight = std::max(4, height / 3);
-  int roofPeakX  = x + width / 2;
-  dst.fillTriangle(x - 1, topY + roofHeight, x + width + 1, topY + roofHeight,
-                   roofPeakX, topY - roofHeight / 2, roofColor);
+  // wall (clipped)
+  dst.fillRect(x, wallTop, width, wallH, wallColor);
 
-  int windowW = std::max(4, width / 5);
-  int windowH = std::max(4, height / 4);
-  int windowY = topY + height / 3;
+  // roof
+  const int peakX = x + width / 2;
+  dst.fillTriangle(x - 1, wallTop, x + width + 1, wallTop,
+                   peakX, houseTop - roofH / 2, roofColor);
+
+  // windows (relative to wall)
+  const int windowW = std::max(4, width / 5);
+  const int windowH = std::max(4, wallH / 4);
+  const int windowY = wallTop + wallH / 3;
   dst.fillRect(x + width / 5, windowY, windowW, windowH, windowGlow);
   dst.fillRect(x + width - windowW - width / 5, windowY, windowW, windowH, windowGlow);
 
-  int doorW = std::max(4, width / 4);
-  int doorH = height / 3;
-  int doorX = doorCenter ? (roofPeakX - doorW / 2) : (x + width / 6);
-  int doorY = baseY - doorH + 1;
+  // door
+  const int doorW = std::max(4, width / 4);
+  const int doorH = wallH / 2;                      // looks nicer with clipped wall
+  const int doorX = doorCenter ? (peakX - doorW / 2) : (x + width / 6);
+  const int doorY = baseY - doorH + 1;
   dst.fillRect(doorX, doorY, doorW, doorH, roofColor);
 }
 
 void drawBarn(TFT_eSprite &dst, int x, int baseY, int width, int height) {
-  int topY = baseY - height + 1;
-  dst.fillRect(x, topY, width, height, barnRed);
-  int roofHeight = height / 2;
-  dst.fillTriangle(x, topY + roofHeight, x + width, topY + roofHeight,
-                   x + width / 2, topY - roofHeight / 2, roofGray);
-  int doorW = width / 3;
-  int doorH = height / 2;
-  int doorX = x + (width - doorW) / 2;
-  int doorY = baseY - doorH + 1;
+  const int topY   = baseY - height + 1;
+  const int roofH  = height / 2;
+  const int wallTop= topY + roofH;
+  const int wallH  = height - roofH;
+
+  dst.fillRect(x, wallTop, width, wallH, barnRed);
+  dst.fillTriangle(x, wallTop, x + width, wallTop,
+                   x + width / 2, topY - roofH / 2, roofGray);
+
+  const int doorW = width / 3, doorH = wallH / 2;
+  const int doorX = x + (width - doorW) / 2;
+  const int doorY = baseY - doorH + 1;
   dst.fillRect(doorX, doorY, doorW, doorH, roofGray);
   dst.drawFastVLine(doorX + doorW / 2, doorY, doorH, barnRed);
   dst.drawFastHLine(doorX, doorY + doorH / 2, doorW, barnRed);
 }
 
 void drawSilo(TFT_eSprite &dst, int x, int baseY, int width, int height) {
-  int topY = baseY - height + 1;
-  dst.fillRect(x, topY, width, height, siloMetal);
-  dst.fillTriangle(x - 1, topY + width / 3, x + width + 1, topY + width / 3,
+  const int topY     = baseY - height + 1;
+  const int roofBase = topY + width / 3;            // your cone base line
+  const int wallH    = baseY - roofBase + 1;
+
+  dst.fillRect(x, roofBase, width, wallH, siloMetal);
+  dst.fillTriangle(x - 1, roofBase, x + width + 1, roofBase,
                    x + width / 2, topY - width / 3, roofGray);
 }
 
 void drawTree(TFT_eSprite &dst, int x, int baseY, int height) {
-  int trunkH = height / 3;
-  int trunkW = std::max(3, height / 6);
-  dst.fillRect(x, baseY - trunkH + 1, trunkW, trunkH, treeTrunk);
+  // Adjust proportions for better visibility
+  int trunkH = height / 2;                       // taller trunk (was /3)
+  int trunkW = std::max(4, height / 5);          // slightly wider trunk
+
+  // Draw trunk first
+  int trunkX = x + height / 2 - trunkW / 2;      // center trunk under crown
+  dst.fillRect(trunkX, baseY - trunkH + 1, trunkW, trunkH, treeTrunk);
+
+  // Draw crown slightly higher
   int crownR = height / 2;
-  dst.fillCircle(x + trunkW / 2, baseY - trunkH - crownR / 2, crownR, treeLeaf);
+  int crownY = baseY - trunkH - crownR / 3;      // raise crown for visibility
+  dst.fillCircle(x + height / 2, crownY, crownR, treeLeaf);
 }
 
 int townWidthForVariant(int variant) {
