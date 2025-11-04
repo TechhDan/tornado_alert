@@ -1,4 +1,6 @@
 // game.cpp
+#include <Arduino.h>
+
 #include "game.h"
 #include "gfx.h"
 #include "ground.h"
@@ -7,6 +9,13 @@
 #include "tornado.h"
 #include "config.h"
 #include "colors.h"
+
+namespace {
+constexpr int SKY_STRIP_TOP = 0;
+constexpr int SKY_STRIP_H   = SCREEN_H - GROUND_HEIGHT;
+
+TFT_eSprite skyComposite(&tft);
+}
 
 static uint32_t lastFrame = 0;
 
@@ -18,10 +27,25 @@ void gameInit() {
   groundInit();
   groundRender();
 
+  // Create the shared composite sprite for the sky band.
+  skyComposite.setColorDepth(8);
+  if (!skyComposite.createSprite(SCREEN_W, SKY_STRIP_H)) {
+    Serial.println("[game] skyComposite createSprite FAILED");
+  } else {
+    Serial.println("[game] skyComposite ready");
+  }
+
   // Init clouds (mountains/tornado can be enabled later)
   cloudsInit();
   mountainsInit();
   tornadoInit();
+
+  // Prime the composite so the first frame is flicker-free.
+  skyComposite.fillSprite(SKY_BLUE(tft));
+  cloudsRender(skyComposite);
+  mountainsRender(skyComposite);
+  tornadoRender(skyComposite);
+  skyComposite.pushSprite(0, SKY_STRIP_TOP);
 
   lastFrame = millis();
 }
@@ -38,13 +62,14 @@ void gameUpdate() {
   tornadoUpdate(dt);
   groundUpdate(dt);
 
-  // Draw one frame. Do NOT clear the sky here (avoids flicker).
-  // cloudsRender() erases old cloud rects with SKY_BLUE and draws the new ones.
-  tft.startWrite();
+  // Draw one frame by rebuilding the shared composite then pushing it once.
+  skyComposite.fillSprite(SKY_BLUE(tft));
+  cloudsRender(skyComposite);
+  mountainsRender(skyComposite);
+  tornadoRender(skyComposite);
 
-  cloudsRender();     // targeted erase + draw (from the updated clouds.cpp)
-  mountainsRender();
-  tornadoRender();
+  tft.startWrite();
+  skyComposite.pushSprite(0, SKY_STRIP_TOP);
   groundRender();     // opaque, drawn last
 
   tft.endWrite();
