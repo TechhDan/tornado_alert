@@ -111,3 +111,7 @@ void tornadoRender(TFT_eSprite &dst) {
   const int baseY = (SCREEN_H - GROUND_HEIGHT) - SPRITE_H;
   drawFunnel(dst, POSITION_X, baseY);
 }
+
+float tornadoWorldX() {
+  return POSITION_X + SPRITE_W / 2.0f;
+}
