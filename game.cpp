@@ -7,6 +7,7 @@
 #include "mountains.h"
 #include "clouds.h"
 #include "tornado.h"
+#include "town.h"
 #include "config.h"
 #include "colors.h"
 
@@ -38,6 +39,7 @@ void gameInit() {
   // Init clouds (mountains/tornado can be enabled later)
   cloudsInit();
   mountainsInit();
+  townInit();
   tornadoInit();
 
   // Prime the composite so the first frame is flicker-free.
@@ -59,6 +61,7 @@ void gameUpdate() {
   // Update
   cloudsUpdate(dt);
   mountainsUpdate(dt);
+  townUpdate(dt);
   tornadoUpdate(dt);
   groundUpdate(dt);
 
@@ -66,6 +69,7 @@ void gameUpdate() {
   skyComposite.fillSprite(SKY_BLUE(tft));
   cloudsRender(skyComposite);
   mountainsRender(skyComposite);
+  townRender(skyComposite);
   tornadoRender(skyComposite);
 
   tft.startWrite();
