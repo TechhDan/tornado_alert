@@ -6,12 +6,21 @@
 #include "gfx.h"
 #include "config.h"
 #include "ground.h"
+#include "tornado.h"
 
 namespace {
 struct Citizen {
+  float    baseOffsetX;
   float    offsetX;
   float    bobPhase;
   float    bobSpeed;
+  float    walkPhase;
+  float    walkSpeed;
+  float    walkAmplitude;
+  float    altitude;
+  float    verticalVelocity;
+  float    horizontalVelocity;
+  bool     flying;
   uint16_t shirtColor;
   uint16_t skinColor;
 };
@@ -30,8 +39,13 @@ constexpr int   TOWN_COUNT            = 3;
 constexpr float TOWN_SPEED_PX_PER_S   = 26.0f;
 constexpr int   MIN_GAP_PX            = 70;
 constexpr int   MAX_GAP_PX            = 120;
-constexpr float TAU_F               = 6.28318530718f;
+constexpr float TAU_F                 = 6.28318530718f;
 constexpr float CITIZEN_BOB_AMPLITUDE = 2.5f;
+constexpr float CITIZEN_WALK_AMPLITUDE = 6.0f;
+constexpr float CITIZEN_TORNADO_TRIGGER_DIST = 38.0f;
+constexpr float CITIZEN_FLY_INITIAL_VELOCITY = 32.0f;
+constexpr float CITIZEN_FLY_VERTICAL_ACCEL   = 24.0f;
+constexpr float CITIZEN_FLY_HORIZONTAL_PUSH  = 26.0f;
 
 Town towns[TOWN_COUNT];
 
@@ -190,55 +204,133 @@ void initTownCitizens(Town &town, int townIndex) {
     Citizen &cit = town.citizens[i];
     float desiredOffset = layout.offsets[i];
     float maxOffset     = static_cast<float>(std::max(4, town.width - 4));
-    cit.offsetX         = std::min(desiredOffset, maxOffset);
-    cit.offsetX         = std::max(4.0f, cit.offsetX);
-    cit.bobPhase  = (townIndex + 1) * 0.9f + i * 1.1f;
-    cit.bobSpeed  = 1.2f + 0.25f * ((town.variant + i) % 4);
-    cit.shirtColor = citizenShirtPalette[(town.variant + townIndex + i) % 5];
-    cit.skinColor  = ((townIndex + i) % 2 == 0) ? citizenSkinLight : citizenSkinDark;
+    cit.baseOffsetX     = std::min(desiredOffset, maxOffset);
+    cit.baseOffsetX     = std::max(4.0f, cit.baseOffsetX);
+    cit.offsetX         = cit.baseOffsetX;
+    cit.bobPhase        = (townIndex + 1) * 0.9f + i * 1.1f;
+    cit.bobSpeed        = 1.2f + 0.25f * ((town.variant + i) % 4);
+    cit.walkPhase       = (townIndex * 0.5f) + i * 0.7f;
+    cit.walkSpeed       = 0.8f + 0.25f * ((town.variant + i) % 3);
+    cit.walkAmplitude   = CITIZEN_WALK_AMPLITUDE - 1.0f + (i % 2) * 1.5f;
+    float leftRange     = std::max(0.5f, cit.baseOffsetX - 4.0f);
+    float rightRange    = std::max(0.5f, static_cast<float>(town.width - 4) - cit.baseOffsetX);
+    float maxRange      = std::max(0.5f, std::min(leftRange, rightRange));
+    cit.walkAmplitude   = std::min(cit.walkAmplitude, maxRange);
+    cit.altitude        = 0.0f;
+    cit.verticalVelocity   = 0.0f;
+    cit.horizontalVelocity = 0.0f;
+    cit.flying          = false;
+    cit.shirtColor      = citizenShirtPalette[(town.variant + townIndex + i) % 5];
+    cit.skinColor       = ((townIndex + i) % 2 == 0) ? citizenSkinLight : citizenSkinDark;
   }
 }
 
 void updateTownCitizens(Town &town, float dt) {
+  float funnelX = tornadoWorldX();
   for (int i = 0; i < town.citizenCount; ++i) {
     Citizen &cit = town.citizens[i];
-    cit.bobPhase += cit.bobSpeed * dt;
+
+    float bobSpeed = cit.flying ? cit.bobSpeed * 2.8f : cit.bobSpeed;
+    cit.bobPhase += bobSpeed * dt;
     if (cit.bobPhase > TAU_F) {
       cit.bobPhase = fmodf(cit.bobPhase, TAU_F);
+    }
+
+    if (!cit.flying) {
+      cit.walkPhase += cit.walkSpeed * dt;
+      if (cit.walkPhase > TAU_F) {
+        cit.walkPhase = fmodf(cit.walkPhase, TAU_F);
+      }
+      float walkOffset = sinf(cit.walkPhase) * cit.walkAmplitude;
+      cit.offsetX = cit.baseOffsetX + walkOffset;
+
+      float citizenWorldX = town.x + cit.offsetX;
+      float dx = citizenWorldX - funnelX;
+      if (fabsf(dx) < CITIZEN_TORNADO_TRIGGER_DIST) {
+        cit.flying = true;
+        cit.altitude = 2.0f;
+        float proximity = CITIZEN_TORNADO_TRIGGER_DIST - fabsf(dx);
+        proximity = std::max(0.0f, proximity);
+        cit.verticalVelocity = CITIZEN_FLY_INITIAL_VELOCITY + proximity;
+        cit.horizontalVelocity = (dx >= 0.0f ? 1.0f : -1.0f)
+                               * (CITIZEN_FLY_HORIZONTAL_PUSH + proximity * 0.7f);
+      }
+    } else {
+      cit.verticalVelocity += CITIZEN_FLY_VERTICAL_ACCEL * dt;
+      cit.altitude += cit.verticalVelocity * dt;
+      cit.offsetX += cit.horizontalVelocity * dt;
+
+      // add a little extra swirl as they spin around
+      float sway = sinf(cit.bobPhase * 1.5f) * 12.0f;
+      cit.offsetX += sway * dt;
+
+      if (cit.altitude > SCREEN_H + 60.0f) {
+        cit.altitude = SCREEN_H + 60.0f;
+      }
     }
   }
 }
 
 void drawCitizen(TFT_eSprite &dst, int x, int baseY, const Citizen &cit) {
-  int bobOffset = static_cast<int>(sinf(cit.bobPhase) * CITIZEN_BOB_AMPLITUDE);
-  int footY     = baseY - bobOffset;
+  bool airborne = cit.flying;
+  int altitudeOffset = airborne ? static_cast<int>(cit.altitude) : 0;
+  float bobAmplitude = airborne ? (CITIZEN_BOB_AMPLITUDE * 0.6f)
+                                : CITIZEN_BOB_AMPLITUDE;
+  int bobOffset = static_cast<int>(sinf(cit.bobPhase) * bobAmplitude);
+  int footY     = baseY - bobOffset - altitudeOffset;
+
+  if (footY < -20) {
+    return; // already off-screen
+  }
 
   // ground shadow
-  dst.drawFastHLine(x - 3, baseY + 1, 6, citizenShadow);
+  if (!airborne) {
+    dst.drawFastHLine(x - 3, baseY + 1, 6, citizenShadow);
+  } else if (cit.altitude < 18.0f) {
+    int shrink = std::max(2, 6 - static_cast<int>(cit.altitude / 3.0f));
+    int shadowX = x - shrink / 2;
+    dst.drawFastHLine(shadowX, baseY + 1, shrink, citizenShadow);
+  }
 
   // legs
-  dst.fillRect(x - 2, footY - 5, 2, 5, citizenPants);
-  dst.fillRect(x,     footY - 5, 2, 5, citizenPants);
+  if (!airborne) {
+    int step = static_cast<int>(sinf(cit.walkPhase * 1.2f) * 2.0f);
+    dst.fillRect(x - 2, footY - 5 - step, 2, 5 + step, citizenPants);
+    dst.fillRect(x,     footY - 5 + step, 2, 5 - step, citizenPants);
+  } else {
+    int legSwing = static_cast<int>(sinf(cit.bobPhase * 2.3f) * 3.0f);
+    dst.fillRect(x - 4, footY - 7 - legSwing, 2, 5, citizenPants);
+    dst.fillRect(x + 2, footY - 5 + legSwing, 2, 5, citizenPants);
+  }
 
   // torso
-  int torsoY = footY - 10;
+  int torsoY = footY - 10 - (airborne ? 2 : 0);
   dst.fillRect(x - 3, torsoY, 6, 6, cit.shirtColor);
 
   // arms as small dots on the side of torso
-  dst.drawPixel(x - 4, torsoY + 2, cit.skinColor);
-  dst.drawPixel(x + 3, torsoY + 2, cit.skinColor);
+  if (!airborne) {
+    dst.drawPixel(x - 4, torsoY + 2, cit.skinColor);
+    dst.drawPixel(x + 3, torsoY + 2, cit.skinColor);
+  } else {
+    dst.drawPixel(x - 5, torsoY + 1, cit.skinColor);
+    dst.drawPixel(x + 4, torsoY + 4, cit.skinColor);
+  }
 
   // head and hair
-  dst.fillCircle(x, torsoY - 2, 2, cit.skinColor);
-  dst.drawFastHLine(x - 2, torsoY - 4, 4, citizenHair);
-  dst.drawPixel(x - 2, torsoY - 3, citizenHair);
-  dst.drawPixel(x + 1, torsoY - 3, citizenHair);
+  int headY = torsoY - 2 - (airborne ? 1 : 0);
+  dst.fillCircle(x, headY, 2, cit.skinColor);
+  dst.drawFastHLine(x - 2, headY - 2, 4, citizenHair);
+  dst.drawPixel(x - 2, headY - 1, citizenHair);
+  dst.drawPixel(x + 1, headY - 1, citizenHair);
 }
 
 void drawTownCitizens(TFT_eSprite &dst, const Town &town, int originX) {
   int baseY = groundLine();
   for (int i = 0; i < town.citizenCount; ++i) {
     const Citizen &cit = town.citizens[i];
+    if (cit.flying && cit.altitude > SCREEN_H) {
+      continue;
+    }
     int screenX = originX + static_cast<int>(cit.offsetX);
     if (screenX + 4 < 0 || screenX - 4 >= SCREEN_W) continue;
     drawCitizen(dst, screenX, baseY, cit);
