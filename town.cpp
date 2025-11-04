@@ -1,22 +1,37 @@
 #include "town.h"
 
 #include <algorithm>
+#include <math.h>
 
 #include "gfx.h"
 #include "config.h"
 #include "ground.h"
 
 namespace {
-struct Town {
-  float x;
-  int   variant;
-  int   width;
+struct Citizen {
+  float    offsetX;
+  float    bobPhase;
+  float    bobSpeed;
+  uint16_t shirtColor;
+  uint16_t skinColor;
 };
 
-constexpr int   TOWN_COUNT          = 3;
-constexpr float TOWN_SPEED_PX_PER_S = 26.0f;
-constexpr int   MIN_GAP_PX          = 70;
-constexpr int   MAX_GAP_PX          = 120;
+constexpr int   MAX_CITIZENS_PER_TOWN = 4;
+
+struct Town {
+  float    x;
+  int      variant;
+  int      width;
+  int      citizenCount;
+  Citizen  citizens[MAX_CITIZENS_PER_TOWN];
+};
+
+constexpr int   TOWN_COUNT            = 3;
+constexpr float TOWN_SPEED_PX_PER_S   = 26.0f;
+constexpr int   MIN_GAP_PX            = 70;
+constexpr int   MAX_GAP_PX            = 120;
+constexpr float TAU_F               = 6.28318530718f;
+constexpr float CITIZEN_BOB_AMPLITUDE = 2.5f;
 
 Town towns[TOWN_COUNT];
 
@@ -29,6 +44,23 @@ uint16_t barnRed;
 uint16_t siloMetal;
 uint16_t treeLeaf;
 uint16_t treeTrunk;
+uint16_t citizenPants;
+uint16_t citizenHair;
+uint16_t citizenShadow;
+uint16_t citizenSkinLight;
+uint16_t citizenSkinDark;
+uint16_t citizenShirtPalette[5];
+
+struct CitizenLayout {
+  int   count;
+  float offsets[MAX_CITIZENS_PER_TOWN];
+};
+
+constexpr CitizenLayout citizenLayouts[] = {
+    {3, {12.0f, 34.0f, 54.0f, 0.0f}},  // variant 0
+    {4, {10.0f, 32.0f, 56.0f, 72.0f}}, // variant 1
+    {3, { 8.0f, 30.0f, 52.0f, 0.0f}},  // variant 2
+};
 
 int groundLine() {
   return (SCREEN_H - GROUND_HEIGHT) - 1;  // sprite coordinates (0 at top of sky band)
@@ -151,6 +183,68 @@ int randomGapForVariant(int variant) {
   }
 }
 
+void initTownCitizens(Town &town, int townIndex) {
+  const CitizenLayout &layout = citizenLayouts[town.variant % 3];
+  town.citizenCount = layout.count;
+  for (int i = 0; i < layout.count; ++i) {
+    Citizen &cit = town.citizens[i];
+    float desiredOffset = layout.offsets[i];
+    float maxOffset     = static_cast<float>(std::max(4, town.width - 4));
+    cit.offsetX         = std::min(desiredOffset, maxOffset);
+    cit.offsetX         = std::max(4.0f, cit.offsetX);
+    cit.bobPhase  = (townIndex + 1) * 0.9f + i * 1.1f;
+    cit.bobSpeed  = 1.2f + 0.25f * ((town.variant + i) % 4);
+    cit.shirtColor = citizenShirtPalette[(town.variant + townIndex + i) % 5];
+    cit.skinColor  = ((townIndex + i) % 2 == 0) ? citizenSkinLight : citizenSkinDark;
+  }
+}
+
+void updateTownCitizens(Town &town, float dt) {
+  for (int i = 0; i < town.citizenCount; ++i) {
+    Citizen &cit = town.citizens[i];
+    cit.bobPhase += cit.bobSpeed * dt;
+    if (cit.bobPhase > TAU_F) {
+      cit.bobPhase = fmodf(cit.bobPhase, TAU_F);
+    }
+  }
+}
+
+void drawCitizen(TFT_eSprite &dst, int x, int baseY, const Citizen &cit) {
+  int bobOffset = static_cast<int>(sinf(cit.bobPhase) * CITIZEN_BOB_AMPLITUDE);
+  int footY     = baseY - bobOffset;
+
+  // ground shadow
+  dst.drawFastHLine(x - 3, baseY + 1, 6, citizenShadow);
+
+  // legs
+  dst.fillRect(x - 2, footY - 5, 2, 5, citizenPants);
+  dst.fillRect(x,     footY - 5, 2, 5, citizenPants);
+
+  // torso
+  int torsoY = footY - 10;
+  dst.fillRect(x - 3, torsoY, 6, 6, cit.shirtColor);
+
+  // arms as small dots on the side of torso
+  dst.drawPixel(x - 4, torsoY + 2, cit.skinColor);
+  dst.drawPixel(x + 3, torsoY + 2, cit.skinColor);
+
+  // head and hair
+  dst.fillCircle(x, torsoY - 2, 2, cit.skinColor);
+  dst.drawFastHLine(x - 2, torsoY - 4, 4, citizenHair);
+  dst.drawPixel(x - 2, torsoY - 3, citizenHair);
+  dst.drawPixel(x + 1, torsoY - 3, citizenHair);
+}
+
+void drawTownCitizens(TFT_eSprite &dst, const Town &town, int originX) {
+  int baseY = groundLine();
+  for (int i = 0; i < town.citizenCount; ++i) {
+    const Citizen &cit = town.citizens[i];
+    int screenX = originX + static_cast<int>(cit.offsetX);
+    if (screenX + 4 < 0 || screenX - 4 >= SCREEN_W) continue;
+    drawCitizen(dst, screenX, baseY, cit);
+  }
+}
+
 }  // namespace
 
 void townInit() {
@@ -163,12 +257,23 @@ void townInit() {
   siloMetal      = tft.color565(180, 180, 190);
   treeLeaf       = tft.color565(40, 140, 70);
   treeTrunk      = tft.color565(110, 70, 40);
+  citizenPants   = tft.color565(40, 70, 120);
+  citizenHair    = tft.color565(60, 40, 30);
+  citizenShadow  = tft.color565(70, 70, 80);
+  citizenSkinLight = tft.color565(255, 224, 189);
+  citizenSkinDark  = tft.color565(210, 170, 135);
+  citizenShirtPalette[0] = tft.color565(70, 140, 210);
+  citizenShirtPalette[1] = tft.color565(200, 90, 90);
+  citizenShirtPalette[2] = tft.color565(240, 190, 80);
+  citizenShirtPalette[3] = tft.color565(100, 180, 120);
+  citizenShirtPalette[4] = tft.color565(160, 120, 200);
 
   float cursor = SCREEN_W + 40.0f;
   for (int i = 0; i < TOWN_COUNT; ++i) {
     towns[i].variant = i % 3;
     towns[i].width   = townWidthForVariant(towns[i].variant);
     towns[i].x       = cursor;
+    initTownCitizens(towns[i], i);
     cursor += towns[i].width + randomGapForVariant(towns[i].variant);
   }
 }
@@ -178,6 +283,7 @@ void townUpdate(uint32_t dt_ms) {
   for (int i = 0; i < TOWN_COUNT; ++i) {
     Town &town = towns[i];
     town.x -= TOWN_SPEED_PX_PER_S * dt;
+    updateTownCitizens(town, dt);
   }
 
   // recycle towns that moved off-screen
@@ -195,6 +301,7 @@ void townUpdate(uint32_t dt_ms) {
       town.variant = (town.variant + 1) % 3;
       town.width   = townWidthForVariant(town.variant);
       town.x       = farthestEdge + randomGapForVariant(town.variant);
+      initTownCitizens(town, i);
     }
   }
 }
@@ -204,5 +311,6 @@ void townRender(TFT_eSprite &dst) {
     int x = static_cast<int>(town.x);
     if (x >= SCREEN_W || x + town.width <= 0) continue;
     drawTownVariant(dst, town.variant, x);
+    drawTownCitizens(dst, town, x);
   }
 }
