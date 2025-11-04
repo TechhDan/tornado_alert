@@ -24,8 +24,6 @@ MountainLayer layers[LAYER_COUNT] = {
   {0.0f, 20, 54, 110, 0, 0}
 };
 
-static TFT_eSprite mountainsCanvas(&tft);
-
 // Tallest vertical span of mountains (px)
 constexpr int STRIP_HEIGHT = 64;
 
@@ -41,11 +39,6 @@ void mountainsInit() {
   layers[1].baseColor      = makeColor(60, 100, 140);
   layers[1].highlightColor = makeColor(160, 190, 210);
 
-  mountainsCanvas.setColorDepth(16);
-  mountainsCanvas.createSprite(SCREEN_W, STRIP_HEIGHT);
-  // Optional (some drivers prefer this when using 16-bit sprites):
-  // mountainsCanvas.setSwapBytes(true);
-
   for (auto &layer : layers) layer.scrollPx = 0.0f;
 }
 
@@ -59,12 +52,9 @@ void mountainsUpdate(uint32_t dt_ms) {
   }
 }
 
-void mountainsRender() {
+void mountainsRender(TFT_eSprite &dst) {
   // Align strip exactly above the ground (no +1 to avoid a gap or overdraw)
   const int topY = (SCREEN_H - GROUND_HEIGHT) - STRIP_HEIGHT;
-
-  // Draw into the off-screen band. Fill with the real sky color first.
-  mountainsCanvas.fillSprite(SKY_BLUE(tft));
 
   for (int i = 0; i < LAYER_COUNT; ++i) {
     MountainLayer &layer = layers[i];
@@ -82,8 +72,8 @@ void mountainsRender() {
       const int baseRow = STRIP_HEIGHT - 1;
 
       // Main mountain
-      mountainsCanvas.fillTriangle(xLeft, baseRow, xRight, baseRow, peakX, peakY,
-                                   layer.baseColor);
+      dst.fillTriangle(xLeft, topY + baseRow, xRight, topY + baseRow, peakX, topY + peakY,
+                       layer.baseColor);
 
       // Highlight wedge
       int highlightLeft   = peakX - layer.patternWidth / 8;
@@ -92,14 +82,10 @@ void mountainsRender() {
       int highlightPeakY  = peakY;
       if (highlightBaseY < highlightPeakY) highlightBaseY = highlightPeakY;
 
-      mountainsCanvas.fillTriangle(highlightLeft, highlightBaseY,
-                                   highlightRight, highlightBaseY,
-                                   peakX, highlightPeakY,
-                                   layer.highlightColor);
+      dst.fillTriangle(highlightLeft, topY + highlightBaseY,
+                       highlightRight, topY + highlightBaseY,
+                       peakX, topY + highlightPeakY,
+                       layer.highlightColor);
     }
   }
-
-  // IMPORTANT: push OPAQUELY (no transparent color). This overwrites
-  // old pixels (including newly revealed sky) in one go → no trails/flicker.
-  mountainsCanvas.pushSprite(0, topY);
 }
