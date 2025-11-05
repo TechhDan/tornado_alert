@@ -12,8 +12,9 @@
 #include "colors.h"
 
 namespace {
-constexpr int SKY_STRIP_TOP = 0;
-constexpr int SKY_STRIP_H   = SCREEN_H - GROUND_HEIGHT;
+constexpr int SKY_STRIP_TOP       = 0;
+constexpr int SKY_STRIP_H         = SCREEN_H - GROUND_HEIGHT;
+constexpr uint32_t BUTTON_DEBOUNCE_MS = 30;
 
 TFT_eSprite skyComposite(&tft);
 bool alertActive = false;
@@ -25,6 +26,8 @@ void gameInit() {
   gfxInit();                  // make sure this calls tft.setRotation(1)
 
   pinMode(ALERT_BUTTON_PIN, INPUT_PULLUP);
+  pinMode(MOTOR_PIN, OUTPUT);
+  digitalWrite(MOTOR_PIN, LOW);
 
   // Paint a valid first frame (sky + ground) so there are no leftovers
   tft.fillScreen(SKY_BLUE(tft));
@@ -62,10 +65,29 @@ void gameUpdate() {
   lastFrame = now;
 
   bool buttonDown = (digitalRead(ALERT_BUTTON_PIN) == LOW);
-  if (buttonDown != alertActive) {
-    alertActive = buttonDown;
-    townSetAlert(alertActive);
+
+  static bool lastButtonReading = false;
+  static uint32_t lastDebounceTime = 0;
+  static bool debounceInitialized = false;
+
+  if (!debounceInitialized) {
+    lastButtonReading = buttonDown;
+    debounceInitialized = true;
   }
+
+  if (buttonDown != lastButtonReading) {
+    lastDebounceTime = now;
+    lastButtonReading = buttonDown;
+  }
+
+  if ((now - lastDebounceTime) > BUTTON_DEBOUNCE_MS) {
+    if (buttonDown != alertActive) {
+      alertActive = buttonDown;
+      townSetAlert(alertActive);
+    }
+  }
+
+  digitalWrite(MOTOR_PIN, alertActive ? HIGH : LOW);
 
   // Update
   cloudsUpdate(dt);
