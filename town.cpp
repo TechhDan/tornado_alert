@@ -44,6 +44,7 @@ constexpr int   MAX_GAP_PX            = 120;
 constexpr float TAU_F                 = 6.28318530718f;
 constexpr float CITIZEN_BOB_AMPLITUDE = 2.5f;
 constexpr float CITIZEN_WALK_AMPLITUDE = 6.0f;
+constexpr float CITIZEN_EXTRA_WANDER    = 54.0f;
 constexpr float CITIZEN_TORNADO_TRIGGER_DIST = 38.0f;
 constexpr float CITIZEN_FLY_INITIAL_VELOCITY = 32.0f;
 constexpr float CITIZEN_FLY_VERTICAL_ACCEL   = 24.0f;
@@ -219,10 +220,11 @@ void initTownCitizens(Town &town, int townIndex) {
     cit.walkPhase       = (townIndex * 0.5f) + i * 0.7f;
     cit.walkSpeed       = 0.8f + 0.25f * ((town.variant + i) % 3);
     float walkAmplitude = CITIZEN_WALK_AMPLITUDE - 1.0f + (i % 2) * 1.5f;
-    float leftRange     = std::max(0.5f, cit.baseOffsetX - 4.0f);
-    float rightRange    = std::max(0.5f, static_cast<float>(town.width - 4) - cit.baseOffsetX);
-    float maxRange      = std::max(0.5f, std::min(leftRange, rightRange));
-    walkAmplitude       = std::min(walkAmplitude, maxRange);
+    float leftRoom      = cit.baseOffsetX + CITIZEN_EXTRA_WANDER;
+    float rightRoom     = (static_cast<float>(town.width) - cit.baseOffsetX)
+                        + CITIZEN_EXTRA_WANDER;
+    float maxRange      = std::max(4.0f, std::min(leftRoom, rightRoom));
+    walkAmplitude       = std::min(walkAmplitude + CITIZEN_EXTRA_WANDER, maxRange);
     cit.baseWalkAmplitude = walkAmplitude;
     cit.walkAmplitude     = walkAmplitude;
     cit.altitude        = 0.0f;
@@ -274,8 +276,8 @@ void updateTownCitizens(Town &town, float dt) {
 
     if (cit.sheltered) {
       cit.sheltered = false;
-      cit.walkAmplitude = 0.0f;
-      cit.offsetX = cit.baseOffsetX;
+      cit.walkAmplitude = cit.baseWalkAmplitude;
+      cit.offsetX = cit.baseOffsetX + sinf(cit.walkPhase) * cit.walkAmplitude;
     }
 
     if (!cit.flying) {
@@ -475,7 +477,7 @@ void townSetAlert(bool active) {
       } else {
         cit.sheltered = false;
         cit.walkAmplitude = cit.baseWalkAmplitude;
-        cit.offsetX = cit.baseOffsetX;
+        cit.offsetX = cit.baseOffsetX + sinf(cit.walkPhase) * cit.walkAmplitude;
       }
     }
   }
