@@ -11,6 +11,10 @@
 #include "config.h"
 #include "colors.h"
 
+#ifdef ARDUINO_ARCH_ESP32
+#include <esp32-hal-ledc.h>
+#endif
+
 namespace {
 constexpr int SKY_STRIP_TOP       = 0;
 constexpr int SKY_STRIP_H         = SCREEN_H - GROUND_HEIGHT;
@@ -35,10 +39,16 @@ void gameInit() {
   pinMode(ALERT_BUTTON_PIN, INPUT_PULLUP);
   pinMode(MOTOR_PIN, OUTPUT);
   digitalWrite(MOTOR_PIN, LOW);
+#ifdef ARDUINO_ARCH_ESP32
   ledcSetup(MOTOR_PWM_CHANNEL, MOTOR_PWM_FREQ, MOTOR_PWM_RES_BITS);
   ledcAttachPin(MOTOR_PIN, MOTOR_PWM_CHANNEL);
+#endif
   motorDuty = 0;
+#ifdef ARDUINO_ARCH_ESP32
   ledcWrite(MOTOR_PWM_CHANNEL, motorDuty);
+#else
+  analogWrite(MOTOR_PIN, motorDuty);
+#endif
 
   // Paint a valid first frame (sky + ground) so there are no leftovers
   tft.fillScreen(SKY_BLUE(tft));
@@ -112,7 +122,11 @@ void gameUpdate() {
       if (nextDuty < 0) nextDuty = 0;
       motorDuty = static_cast<uint8_t>(nextDuty);
     }
+#ifdef ARDUINO_ARCH_ESP32
     ledcWrite(MOTOR_PWM_CHANNEL, motorDuty);
+#else
+    analogWrite(MOTOR_PIN, motorDuty);
+#endif
   }
 
   // Update
