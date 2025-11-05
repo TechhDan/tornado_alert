@@ -16,5 +16,5 @@ constexpr uint32_t FRAME_MS = 16;  // ~60 FPS
 #define TFT_MISO 19  // (unused by LCD, harmless)
 
 // Gameplay inputs
-constexpr int ALERT_BUTTON_PIN = 34;      // wire your shelter button here
+constexpr int ALERT_BUTTON_PIN = 25;      // GPIO25 has an internal pull-up
 constexpr uint32_t ALERT_DURATION_MS = 8000;  // how long citizens stay sheltered
