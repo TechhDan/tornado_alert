@@ -48,9 +48,9 @@ constexpr float CITIZEN_TORNADO_TRIGGER_DIST = 38.0f;
 constexpr float CITIZEN_FLY_INITIAL_VELOCITY = 32.0f;
 constexpr float CITIZEN_FLY_VERTICAL_ACCEL   = 24.0f;
 constexpr float CITIZEN_FLY_HORIZONTAL_PUSH  = 26.0f;
-constexpr float SHELTER_FADE_RATE            = 4.2f;
-constexpr float SHELTER_RECOVER_RATE         = 1.6f;
-constexpr float SHELTER_LERP_SPEED           = 6.0f;
+constexpr float SHELTER_FADE_RATE            = 1.6f;
+constexpr float SHELTER_RECOVER_RATE         = 3.2f;
+constexpr float SHELTER_LERP_SPEED           = 2.4f;
 
 Town towns[TOWN_COUNT];
 
@@ -474,7 +474,7 @@ void townSetAlert(bool active) {
         cit.sheltered = false;
       } else {
         cit.sheltered = false;
-        cit.walkAmplitude = 0.0f;
+        cit.walkAmplitude = cit.baseWalkAmplitude;
         cit.offsetX = cit.baseOffsetX;
       }
     }
