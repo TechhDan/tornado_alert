@@ -17,4 +17,3 @@ constexpr uint32_t FRAME_MS = 16;  // ~60 FPS
 
 // Gameplay inputs
 constexpr int ALERT_BUTTON_PIN = 25;      // GPIO25 has an internal pull-up
-constexpr uint32_t ALERT_DURATION_MS = 8000;  // how long citizens stay sheltered

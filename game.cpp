@@ -17,8 +17,6 @@ constexpr int SKY_STRIP_H   = SCREEN_H - GROUND_HEIGHT;
 
 TFT_eSprite skyComposite(&tft);
 bool alertActive = false;
-bool lastButtonState = true;  // HIGH when not pressed because of INPUT_PULLUP
-uint32_t alertStartedAt = 0;
 }
 
 static uint32_t lastFrame = 0;
@@ -27,7 +25,6 @@ void gameInit() {
   gfxInit();                  // make sure this calls tft.setRotation(1)
 
   pinMode(ALERT_BUTTON_PIN, INPUT_PULLUP);
-  lastButtonState = digitalRead(ALERT_BUTTON_PIN) == HIGH;
 
   // Paint a valid first frame (sky + ground) so there are no leftovers
   tft.fillScreen(SKY_BLUE(tft));
@@ -64,19 +61,10 @@ void gameUpdate() {
   if (dt < FRAME_MS) return;
   lastFrame = now;
 
-  bool buttonState = (digitalRead(ALERT_BUTTON_PIN) == HIGH);
-  bool pressed = (!buttonState && lastButtonState);
-  lastButtonState = buttonState;
-
-  if (pressed) {
-    if (!alertActive) {
-      townSetAlert(true);
-    }
-    alertActive = true;
-    alertStartedAt = now;
-  } else if (alertActive && now - alertStartedAt >= ALERT_DURATION_MS) {
-    alertActive = false;
-    townSetAlert(false);
+  bool buttonDown = (digitalRead(ALERT_BUTTON_PIN) == LOW);
+  if (buttonDown != alertActive) {
+    alertActive = buttonDown;
+    townSetAlert(alertActive);
   }
 
   // Update
