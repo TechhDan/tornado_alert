@@ -11,18 +11,11 @@
 #include "config.h"
 #include "colors.h"
 
-#ifdef ARDUINO_ARCH_ESP32
-#include <esp32-hal-ledc.h>
-#endif
-
 namespace {
 constexpr int SKY_STRIP_TOP       = 0;
 constexpr int SKY_STRIP_H         = SCREEN_H - GROUND_HEIGHT;
 constexpr uint32_t BUTTON_DEBOUNCE_MS = 30;
-constexpr int MOTOR_PWM_CHANNEL = 0;
-constexpr uint32_t MOTOR_PWM_FREQ = 2000;  // Hz
-constexpr uint8_t MOTOR_PWM_RES_BITS = 8;  // 0-255 duty control
-constexpr uint8_t MOTOR_PWM_MAX = (1 << MOTOR_PWM_RES_BITS) - 1;
+constexpr uint8_t MOTOR_PWM_MAX = 255;  // analogWrite duty range
 constexpr uint8_t MOTOR_RAMP_UP_STEP = 8;   // adjust to soften inrush
 constexpr uint8_t MOTOR_RAMP_DOWN_STEP = 16;
 
@@ -39,16 +32,8 @@ void gameInit() {
   pinMode(ALERT_BUTTON_PIN, INPUT_PULLUP);
   pinMode(MOTOR_PIN, OUTPUT);
   digitalWrite(MOTOR_PIN, LOW);
-#ifdef ARDUINO_ARCH_ESP32
-  ledcSetup(MOTOR_PWM_CHANNEL, MOTOR_PWM_FREQ, MOTOR_PWM_RES_BITS);
-  ledcAttachPin(MOTOR_PIN, MOTOR_PWM_CHANNEL);
-#endif
   motorDuty = 0;
-#ifdef ARDUINO_ARCH_ESP32
-  ledcWrite(MOTOR_PWM_CHANNEL, motorDuty);
-#else
   analogWrite(MOTOR_PIN, motorDuty);
-#endif
 
   // Paint a valid first frame (sky + ground) so there are no leftovers
   tft.fillScreen(SKY_BLUE(tft));
@@ -122,11 +107,7 @@ void gameUpdate() {
       if (nextDuty < 0) nextDuty = 0;
       motorDuty = static_cast<uint8_t>(nextDuty);
     }
-#ifdef ARDUINO_ARCH_ESP32
-    ledcWrite(MOTOR_PWM_CHANNEL, motorDuty);
-#else
     analogWrite(MOTOR_PIN, motorDuty);
-#endif
   }
 
   // Update
