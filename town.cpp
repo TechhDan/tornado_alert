@@ -16,11 +16,13 @@ struct Citizen {
   float    bobSpeed;
   float    walkPhase;
   float    walkSpeed;
+  float    baseWalkAmplitude;
   float    walkAmplitude;
   float    altitude;
   float    verticalVelocity;
   float    horizontalVelocity;
   bool     flying;
+  bool     sheltered;
   uint16_t shirtColor;
   uint16_t skinColor;
 };
@@ -46,8 +48,13 @@ constexpr float CITIZEN_TORNADO_TRIGGER_DIST = 38.0f;
 constexpr float CITIZEN_FLY_INITIAL_VELOCITY = 32.0f;
 constexpr float CITIZEN_FLY_VERTICAL_ACCEL   = 24.0f;
 constexpr float CITIZEN_FLY_HORIZONTAL_PUSH  = 26.0f;
+constexpr float SHELTER_FADE_RATE            = 4.2f;
+constexpr float SHELTER_RECOVER_RATE         = 1.6f;
+constexpr float SHELTER_LERP_SPEED           = 6.0f;
 
 Town towns[TOWN_COUNT];
+
+bool g_alertActive = false;
 
 uint16_t houseWallLight;
 uint16_t houseWallDark;
@@ -211,15 +218,18 @@ void initTownCitizens(Town &town, int townIndex) {
     cit.bobSpeed        = 1.2f + 0.25f * ((town.variant + i) % 4);
     cit.walkPhase       = (townIndex * 0.5f) + i * 0.7f;
     cit.walkSpeed       = 0.8f + 0.25f * ((town.variant + i) % 3);
-    cit.walkAmplitude   = CITIZEN_WALK_AMPLITUDE - 1.0f + (i % 2) * 1.5f;
+    float walkAmplitude = CITIZEN_WALK_AMPLITUDE - 1.0f + (i % 2) * 1.5f;
     float leftRange     = std::max(0.5f, cit.baseOffsetX - 4.0f);
     float rightRange    = std::max(0.5f, static_cast<float>(town.width - 4) - cit.baseOffsetX);
     float maxRange      = std::max(0.5f, std::min(leftRange, rightRange));
-    cit.walkAmplitude   = std::min(cit.walkAmplitude, maxRange);
+    walkAmplitude       = std::min(walkAmplitude, maxRange);
+    cit.baseWalkAmplitude = walkAmplitude;
+    cit.walkAmplitude     = walkAmplitude;
     cit.altitude        = 0.0f;
     cit.verticalVelocity   = 0.0f;
     cit.horizontalVelocity = 0.0f;
     cit.flying          = false;
+    cit.sheltered       = false;
     cit.shirtColor      = citizenShirtPalette[(town.variant + townIndex + i) % 5];
     cit.skinColor       = ((townIndex + i) % 2 == 0) ? citizenSkinLight : citizenSkinDark;
   }
@@ -231,12 +241,49 @@ void updateTownCitizens(Town &town, float dt) {
     Citizen &cit = town.citizens[i];
 
     float bobSpeed = cit.flying ? cit.bobSpeed * 2.8f : cit.bobSpeed;
+    if (g_alertActive) {
+      bobSpeed = cit.bobSpeed;  // keep calm bob while sheltering
+    }
     cit.bobPhase += bobSpeed * dt;
     if (cit.bobPhase > TAU_F) {
       cit.bobPhase = fmodf(cit.bobPhase, TAU_F);
     }
 
+    if (g_alertActive) {
+      cit.flying = false;
+      cit.altitude = 0.0f;
+      cit.verticalVelocity = 0.0f;
+      cit.horizontalVelocity = 0.0f;
+
+      cit.walkPhase += cit.walkSpeed * dt;
+      if (cit.walkPhase > TAU_F) {
+        cit.walkPhase = fmodf(cit.walkPhase, TAU_F);
+      }
+
+      float lerp = std::min(1.0f, dt * SHELTER_LERP_SPEED);
+      cit.offsetX += (cit.baseOffsetX - cit.offsetX) * lerp;
+      float fade = dt * SHELTER_FADE_RATE * cit.baseWalkAmplitude;
+      cit.walkAmplitude = std::max(0.0f, cit.walkAmplitude - fade);
+
+      if (!cit.sheltered && fabsf(cit.baseOffsetX - cit.offsetX) < 0.25f
+          && cit.walkAmplitude <= 0.05f) {
+        cit.sheltered = true;
+      }
+      continue;
+    }
+
+    if (cit.sheltered) {
+      cit.sheltered = false;
+      cit.walkAmplitude = 0.0f;
+      cit.offsetX = cit.baseOffsetX;
+    }
+
     if (!cit.flying) {
+      if (cit.walkAmplitude < cit.baseWalkAmplitude) {
+        float recover = dt * SHELTER_RECOVER_RATE * cit.baseWalkAmplitude;
+        cit.walkAmplitude = std::min(cit.baseWalkAmplitude, cit.walkAmplitude + recover);
+      }
+
       cit.walkPhase += cit.walkSpeed * dt;
       if (cit.walkPhase > TAU_F) {
         cit.walkPhase = fmodf(cit.walkPhase, TAU_F);
@@ -328,6 +375,9 @@ void drawTownCitizens(TFT_eSprite &dst, const Town &town, int originX) {
   int baseY = groundLine();
   for (int i = 0; i < town.citizenCount; ++i) {
     const Citizen &cit = town.citizens[i];
+    if (g_alertActive && cit.sheltered) {
+      continue;
+    }
     if (cit.flying && cit.altitude > SCREEN_H) {
       continue;
     }
@@ -340,6 +390,7 @@ void drawTownCitizens(TFT_eSprite &dst, const Town &town, int originX) {
 }  // namespace
 
 void townInit() {
+  g_alertActive = false;
   houseWallLight = tft.color565(235, 220, 200);
   houseWallDark  = tft.color565(200, 180, 160);
   roofRed        = tft.color565(180, 60, 60);
@@ -404,5 +455,28 @@ void townRender(TFT_eSprite &dst) {
     if (x >= SCREEN_W || x + town.width <= 0) continue;
     drawTownVariant(dst, town.variant, x);
     drawTownCitizens(dst, town, x);
+  }
+}
+
+void townSetAlert(bool active) {
+  if (g_alertActive == active) return;
+  g_alertActive = active;
+
+  for (int i = 0; i < TOWN_COUNT; ++i) {
+    Town &town = towns[i];
+    for (int j = 0; j < town.citizenCount; ++j) {
+      Citizen &cit = town.citizens[j];
+      if (active) {
+        cit.flying = false;
+        cit.altitude = 0.0f;
+        cit.verticalVelocity = 0.0f;
+        cit.horizontalVelocity = 0.0f;
+        cit.sheltered = false;
+      } else {
+        cit.sheltered = false;
+        cit.walkAmplitude = 0.0f;
+        cit.offsetX = cit.baseOffsetX;
+      }
+    }
   }
 }
