@@ -12,11 +12,16 @@
 #include "colors.h"
 
 namespace {
-constexpr int SKY_STRIP_TOP = 0;
-constexpr int SKY_STRIP_H   = SCREEN_H - GROUND_HEIGHT;
+constexpr int SKY_STRIP_TOP       = 0;
+constexpr int SKY_STRIP_H         = SCREEN_H - GROUND_HEIGHT;
+constexpr uint32_t BUTTON_DEBOUNCE_MS = 30;
+constexpr uint8_t MOTOR_PWM_MAX = 255;  // analogWrite duty range
+constexpr uint8_t MOTOR_RAMP_UP_STEP = 8;   // adjust to soften inrush
+constexpr uint8_t MOTOR_RAMP_DOWN_STEP = 16;
 
 TFT_eSprite skyComposite(&tft);
 bool alertActive = false;
+uint8_t motorDuty = 0;
 }
 
 static uint32_t lastFrame = 0;
@@ -25,6 +30,10 @@ void gameInit() {
   gfxInit();                  // make sure this calls tft.setRotation(1)
 
   pinMode(ALERT_BUTTON_PIN, INPUT_PULLUP);
+  pinMode(MOTOR_PIN, OUTPUT);
+  digitalWrite(MOTOR_PIN, LOW);
+  motorDuty = 0;
+  analogWrite(MOTOR_PIN, motorDuty);
 
   // Paint a valid first frame (sky + ground) so there are no leftovers
   tft.fillScreen(SKY_BLUE(tft));
@@ -62,9 +71,43 @@ void gameUpdate() {
   lastFrame = now;
 
   bool buttonDown = (digitalRead(ALERT_BUTTON_PIN) == LOW);
-  if (buttonDown != alertActive) {
-    alertActive = buttonDown;
-    townSetAlert(alertActive);
+
+  static bool lastButtonReading = false;
+  static uint32_t lastDebounceTime = 0;
+  static bool debounceInitialized = false;
+
+  if (!debounceInitialized) {
+    lastButtonReading = buttonDown;
+    debounceInitialized = true;
+  }
+
+  if (buttonDown != lastButtonReading) {
+    lastDebounceTime = now;
+    lastButtonReading = buttonDown;
+  }
+
+  if ((now - lastDebounceTime) > BUTTON_DEBOUNCE_MS) {
+    if (buttonDown != alertActive) {
+      alertActive = buttonDown;
+      townSetAlert(alertActive);
+    }
+  }
+
+  uint8_t targetDuty = alertActive ? MOTOR_PWM_MAX : 0;
+  uint8_t rampStep = alertActive ? MOTOR_RAMP_UP_STEP : MOTOR_RAMP_DOWN_STEP;
+  if (motorDuty != targetDuty) {
+    if (motorDuty < targetDuty) {
+      int nextDuty = static_cast<int>(motorDuty) + rampStep;
+      if (nextDuty > targetDuty) nextDuty = targetDuty;
+      if (nextDuty > MOTOR_PWM_MAX) nextDuty = MOTOR_PWM_MAX;
+      motorDuty = static_cast<uint8_t>(nextDuty);
+    } else {
+      int nextDuty = static_cast<int>(motorDuty) - rampStep;
+      if (nextDuty < targetDuty) nextDuty = targetDuty;
+      if (nextDuty < 0) nextDuty = 0;
+      motorDuty = static_cast<uint8_t>(nextDuty);
+    }
+    analogWrite(MOTOR_PIN, motorDuty);
   }
 
   // Update

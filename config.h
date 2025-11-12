@@ -17,3 +17,6 @@ constexpr uint32_t FRAME_MS = 16;  // ~60 FPS
 
 // Gameplay inputs
 constexpr int ALERT_BUTTON_PIN = 25;      // GPIO25 has an internal pull-up
+
+// Motor control
+constexpr int MOTOR_PIN = 26;             // MOSFET gate driving the motor
